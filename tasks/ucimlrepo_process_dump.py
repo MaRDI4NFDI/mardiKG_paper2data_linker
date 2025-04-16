@@ -31,10 +31,13 @@ def process_uci_ml_repo_dump(json_input: str) -> None:
     datasets_to_process = _get_datasets_with_arxiv_citations( datasets_with_citations )
     logger.info("Collected %d datasets to check", len(datasets_to_process))
 
+    # Check for entries for which the arXiv IDs are in the Knowledge Graph
     datasets_with_kg_entry = _check_arxiv_ids_in_kg( datasets_to_process, json_input+".kg_entries" )
     logger.info("Collected %d datasets to process", len(datasets_with_kg_entry))
 
     logger.info("Done.")
+
+    return datasets_with_kg_entry
 
 
 def _get_datasets_with_citations( data: list[dict] ) -> list[str]:
@@ -145,7 +148,7 @@ def _check_arxiv_ids_in_kg(datasets_with_arxiv: List[dict], cache_path: str) -> 
                         "dataset_name": entry["dataset_name"],
                         "dataset_url": entry["dataset_url"],
                         "arxiv_id": arxiv_id,
-                        "arxiv_title": results[0]["title"],
+                        "arxiv_title": citation["title"],
                         "QID": results[0]["qid"]
                     })
             except Exception as e:
