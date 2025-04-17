@@ -3,6 +3,8 @@
 
 import asyncio
 import re
+from pathlib import Path
+
 import requests
 import json
 import os
@@ -178,18 +180,21 @@ def load_progress(path):
 
 
 @task
-async def start_ucimlrepo_crawl(path_and_name_progress_file: str ):
+async def start_ucimlrepo_crawl(uci_dump_file: str, last_index_to_crawl: int = 968):
     """Main asynchronous entry point for processing UCI datasets.
 
     Iterates through datasets, enriches metadata, and saves progress incrementally.
     """
+    progress_suffix = '_progress'
+
     logger = get_run_logger()
     logger.info("Starting crawl...")
 
-    results, start_id = load_progress(path_and_name_progress_file)
-    logger.info(f"Resuming from dataset ID {start_id}")
+    if Path(uci_dump_file + progress_suffix).is_file():
+        results, start_id = load_progress(uci_dump_file + progress_suffix)
+        logger.info(f"Resuming from dataset ID {start_id}")
 
-    for dataset_id in range(start_id, 968):
+    for dataset_id in range(start_id, last_index_to_crawl):
         try:
             logger.info(f"Processing dataset ID {dataset_id}")
 
@@ -228,12 +233,13 @@ async def start_ucimlrepo_crawl(path_and_name_progress_file: str ):
             })
 
             if dataset_id % 10 == 0:
-                save_progress(results, path_and_name_progress_file)
+                save_progress(results, uci_dump_file + progress_suffix)
 
         except Exception as e:
             print(f"Error processing dataset {dataset_id}: {e}")
 
-    save_progress(results, path_and_name_progress_file)
+    # Save finale version
+    save_progress(results, uci_dump_file)
 
 
 if __name__ == "__main__":

@@ -5,15 +5,18 @@ import csv
 
 
 @task
-def get_kg_qids(entries: List[Dict], mapping_file: str) -> List[Dict]:
-    """Returns a minimal list of dicts with arXiv ID, paper QID, and related dataset QID.
+def get_dataset_qids_from_kg(entries: List[Dict], mapping_file: str) -> List[Dict]:
+    """Enriches entries with the corresponding MaRDI dataset QID based on UCI dataset ID.
+
+    Each entry is expected to contain metadata for a paper linked to a UCI dataset.
+    Only entries that have a matching 'dataset_mardi_qid' in the mapping will be retained.
 
     Args:
-        entries (List[Dict]): Entries from _check_arxiv_ids_in_kg.
-        mapping_file (str): Path to CSV file mapping UCI dataset_id to MaRDI QID.
+        entries (List[Dict]): List of entries, each having the field 'dataset_id' (int)
+        mapping_file (str): Path to a CSV file mapping 'uci_id' to 'mardi_qid'.
 
     Returns:
-        List[Dict]: Each item contains 'arxiv_id', 'QID', and 'dataset_mardi_qid'.
+        List[Dict]: Filtered list of entries, each with an added 'dataset_mardi_qid'.
     """
     logger = get_run_logger()
     id_to_qid = _load_dataset_qid_mapping(mapping_file)
@@ -23,17 +26,12 @@ def get_kg_qids(entries: List[Dict], mapping_file: str) -> List[Dict]:
         dataset_id = entry.get("dataset_id")
         mardi_qid = id_to_qid.get(dataset_id)
 
-        if not mardi_qid:
-            logger.warning(f"No MaRDI QID found for dataset_id {dataset_id}")
-            continue  # skip if no match
-
-        result.append({
-            "QID": entry["QID"],
-            "arxiv_id": entry["arxiv_id"],
-            "arxiv_title": entry["arxiv_title"],
-            "dataset_name": entry["dataset_name"],
-            "dataset_mardi_qid": mardi_qid
-        })
+        if mardi_qid:
+            new_entry = dict(entry)
+            new_entry["dataset_mardi_QID"] = mardi_qid
+            result.append(new_entry)
+        else:
+            logger.warning(f"No MaRDI QID found for UCI dataset_id {dataset_id} — entry skipped.")
 
     return result
 
