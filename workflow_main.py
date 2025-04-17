@@ -15,6 +15,7 @@ from tasks.ucimlrepo_process_dump import process_uci_ml_repo_dump
 from tasks.ucimlrepo_get_kg_qids import get_dataset_qids_from_kg
 from tasks.download import download_ucidump_lakefs
 from tasks.upload import upload_ucidump_lakefs
+from tasks.ucimlrepo_get_datasets import get_available_datasets
 
 from utils.logger_helper import configure_prefect_logging_to_file
 
@@ -49,6 +50,14 @@ def process_datasets(
     logger.info("Using data directory: %s", DATA_PATH)
     uci_dump_filename = "uci_datasets_final.json"
     uci_dump_file_and_path = str(Path(DATA_PATH) / uci_dump_filename)
+
+    # Get list of available datasets through API
+    task = get_available_datasets.submit()
+    uci_datasets = task.result()
+
+    # TODO
+    # Later: Check whether a dataset is not included in dump yet
+    #        - If not: crawl it
 
     # Download UCI dump file if it does not exist
     if not Path(uci_dump_file_and_path).is_file():
