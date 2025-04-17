@@ -4,6 +4,7 @@
 import asyncio
 import re
 from pathlib import Path
+from typing import List, Dict
 
 import requests
 import json
@@ -180,7 +181,7 @@ def load_progress(path):
 
 
 @task
-async def start_ucimlrepo_crawl(uci_dump_file: str, last_index_to_crawl: int = 968):
+async def start_ucimlrepo_crawl(uci_dump_file: str, dataset_id_list: List[int]):
     """Main asynchronous entry point for processing UCI datasets.
 
     Iterates through datasets, enriches metadata, and saves progress incrementally.
@@ -194,7 +195,7 @@ async def start_ucimlrepo_crawl(uci_dump_file: str, last_index_to_crawl: int = 9
         results, start_id = load_progress(uci_dump_file + progress_suffix)
         logger.info(f"Resuming from dataset ID {start_id}")
 
-    for dataset_id in range(start_id, last_index_to_crawl):
+    for dataset_id in dataset_id_list:
         try:
             logger.info(f"Processing dataset ID {dataset_id}")
 

@@ -20,8 +20,7 @@ if __name__ == "__main__":
         parameters={
             "lakefs_url": "https://lake-bioinfmed.zib.de",
             "lakefs_repo": "mardi-workflows-files",
-            "lakefs_path": "mardiKG_paper2data_linker/",
-            "last_index_to_crawl": 968
+            "lakefs_path": "mardiKG_paper2data_linker/"
         },
         job_variables={"pip_packages": [
             "boto3",
