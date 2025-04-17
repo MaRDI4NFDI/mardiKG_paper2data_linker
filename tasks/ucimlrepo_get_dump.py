@@ -8,7 +8,7 @@ from tasks.ucimlrepo_crawl import start_ucimlrepo_crawl
 
 @task
 def get_dump(
-        uci_dump_file_and_path: str, uci_dataset_list: List[int],
+        uci_dump_file_and_path: str, uci_dataset_ids: List[int],
         lakefs_url: str, lakefs_repo: str, lakefs_path: str) -> bool:
 
     logger = get_run_logger()
@@ -36,9 +36,8 @@ def get_dump(
                    "starting full crawl ...")
 
     # Start full crawl with IDs from the API call
-    dataset_ids = [d["id"] for d in uci_dataset_list]
     start_ucimlrepo_crawl.submit(
-        uci_dump_file=uci_dump_file_and_path, dataset_id_list=dataset_ids
+        uci_dump_file=uci_dump_file_and_path, dataset_id_list=uci_dataset_ids
     ).wait()
 
     return False

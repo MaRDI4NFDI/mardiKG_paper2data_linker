@@ -15,6 +15,7 @@ from tasks.ucimlrepo_get_kg_qids import get_dataset_qids_from_kg
 from tasks.upload import upload_ucidump_lakefs
 from tasks.ucimlrepo_get_dump import get_dump
 from tasks.ucimlrepo_get_datasets import get_available_datasets
+from tasks.ucimlrepo_update_dump import update_dump
 
 from utils.logger_helper import configure_prefect_logging_to_file
 
@@ -42,25 +43,35 @@ def process_datasets(
     logger = get_run_logger()
     logger.info(f"Starting workflow on system: {socket.gethostname()} by user: {getpass.getuser()}")
 
-    # Check whether data (and path) already exists
+    # Check whether data directory already exists
     Path(DATA_PATH).mkdir(parents=True, exist_ok=True)
     logger.info("Using data directory: %s", DATA_PATH)
 
     # Get list of available datasets through API
     task = get_available_datasets.submit()
     uci_dataset_list = task.result()
+    uci_dataset_ids = [d["id"] for d in uci_dataset_list]
+
 
     # Get dump - if not available locally, download or crawl
     uci_dump_filename = "uci_datasets_final.json"
     uci_dump_file_and_path = str(Path(DATA_PATH) / uci_dump_filename)
     task = get_dump.submit(
         uci_dump_file_and_path=uci_dump_file_and_path,
-        uci_dataset_list=uci_dataset_list,
+        uci_dataset_ids=uci_dataset_ids,
         lakefs_url=lakefs_url,
         lakefs_repo=lakefs_repo,
         lakefs_path=lakefs_path
     )
     dump_file_existed = task.result()
+
+    # Check whether available dump should be updated
+    # TODO
+    task = update_dump.submit(
+        uci_dump_file_and_path=uci_dump_file_and_path,
+        uci_dataset_ids=uci_dataset_ids
+    )
+    dump_file_updated = task.result()
 
     # Process dump
     logger.info("Processing dump...")

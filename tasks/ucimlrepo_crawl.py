@@ -194,12 +194,17 @@ async def start_ucimlrepo_crawl(uci_dump_file: str, dataset_id_list: List[int]):
     if Path(uci_dump_file + progress_suffix).is_file():
         results, start_id = load_progress(uci_dump_file + progress_suffix)
         logger.info(f"Resuming from dataset ID {start_id}")
+    else:
+        results = []
 
     for dataset_id in dataset_id_list:
         try:
             logger.info(f"Processing dataset ID {dataset_id}")
 
+            # Get intro paper from API
             intro_paper = get_dataset_intro_paper(dataset_id)
+
+            # Get more info from dataset html-page crawl
             metadata_md = await get_dataset_metadata_as_md(dataset_id)
             dataset_name = get_name_from_metadata_md(metadata_md)
             dataset_url = get_url_from_metadata_md(metadata_md)
