@@ -60,26 +60,16 @@ def process_datasets(
     task = process_uci_ml_repo_dump.submit(json_input=uci_dump_file)
     datasets_with_citations_available_in_mardi = task.result()
 
-    # Link entries to available datasets in the KG
+    # Add dataset QID to entries if datasets exists in the KG
+    # Returns only entries for which a dataset QID exists
     logger.info("Linking to KG datasets")
     mapping_file = str(Path(DATA_PATH) / "uci2mardi_dataset_mapping.txt")
     task = get_dataset_qids_from_kg.submit(
         entries=datasets_with_citations_available_in_mardi, mapping_file=mapping_file)
     hits = task.result()
 
-    for entry in hits:
-        print(f"\nDataset: {entry['dataset_name']} (ID: {entry['dataset_id']})")
-        print(f"MaRDI dataset QID: {entry.get('dataset_mardi_QID')}")
-        print(f"Publication arXiv ID: {entry.get('arxiv_id')}")
-        print(f"Publication QID: {entry.get('publication_mardi_QID')}")
-        print("Citations with arXiv IDs:")
-
-        for citation in entry.get("citations", []):
-            if citation.get("arxiv"):
-                print(f"  - {citation['title']} (arXiv: {citation['arxiv']})")
-
-
-     #link_publications_to_datasets_in_mardi_kg( hits )
+    # Perform linking in KG
+    link_publications_to_datasets_in_mardi_kg( hits )
 
     logger.info("Workflow complete.")
 

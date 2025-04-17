@@ -160,21 +160,23 @@ def _get_datasets_available_in_kg(datasets_with_arxiv: List[dict], cache_path: s
 
     found_results = []
 
-    for entry in datasets_with_arxiv:
-        for citation in entry.get("citations", []):
+    for dataset_entry in datasets_with_arxiv:
+        for citation in dataset_entry.get("citations", []):
             arxiv_id = citation.get("arxiv")
             if not arxiv_id:
                 continue
 
             try:
-                logger.info("Checking arXiv ID: %s", arxiv_id)
+                logger.info(f"Checking dataset '{dataset_entry['dataset_name']}' and "
+                            f"citation with arXiv ID '{arxiv_id}'")
                 results = query_mardi_kg_for_arxivid(arxiv_id)
                 if results:
                     logger.info(f"arXiv:{arxiv_id} found {len(results)} result(s) in MaRDI KG")
 
-                    # Preserve all original fields from entry and citation
+                    # Preserve original fields from entry except "citation" & "intro_paper"
+                    # and add info about found citation
                     combined_entry = {
-                        **entry,
+                        **{k: v for k, v in dataset_entry.items() if k not in ("citations", "intro_paper")},
                         "arxiv_title": citation.get("title"),
                         "arxiv_id": citation.get("arxiv"),
                         "publication_mardi_QID": results[0]["qid"]
