@@ -36,7 +36,7 @@ def get_available_datasets(
 
     # Build query params
     query_params = {
-        "filter": filter.lower() if filter else "python"
+        "filter": filter.lower() if filter else ""
     }
     if search:
         query_params["search"] = search.lower()
@@ -45,6 +45,7 @@ def get_available_datasets(
 
     # Construct full URL
     api_list_url = API_LIST_URL + "?" + urllib.parse.urlencode(query_params)
+    print(api_list_url)
 
     try:
         response = urllib.request.urlopen(

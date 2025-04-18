@@ -8,7 +8,8 @@ from tasks.ucimlrepo_crawl import start_ucimlrepo_full_crawl
 
 @task
 def get_dump(
-        uci_dump_file_and_path: str, uci_dataset_ids: List[int],
+        uci_dump_file_and_path: str,
+        uci_dataset_ids: List[int],
         lakefs_url: str, lakefs_repo: str, lakefs_path: str) -> bool:
 
     logger = get_run_logger()

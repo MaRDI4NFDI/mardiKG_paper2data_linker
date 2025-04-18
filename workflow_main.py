@@ -12,6 +12,8 @@ from tasks.ucimlrepo_get_dump import get_dump
 from tasks.ucimlrepo_get_datasets import get_available_datasets
 from tasks.ucimlrepo_update_dump import update_dump
 from tasks.ucimlrepo_link_intropapers_with_datasets import link_intropapers_with_datasets
+from tasks.ucimlrepo_link_papers_with_datasets import link_papers_with_datasets
+from tasks.upload import upload_artifacts
 
 from utils.logger_helper import configure_prefect_logging_to_file
 
@@ -58,7 +60,7 @@ def process_datasets(
     )
     dump_file_existed = task.result()
 
-    # TODO: Check whether available dump should be updated
+    # Check whether available dump should be updated
     task = update_dump.submit(
         uci_dump_file_and_path=uci_dump_file_and_path,
         uci_dataset_ids=uci_dataset_ids
@@ -66,9 +68,9 @@ def process_datasets(
     dump_file_updated = task.result()
 
     # Link papers to datasets
-#    logger.info("Processing dump: linking papers to datasets...")
-#    mapping_file = str(Path(DATA_PATH) / "uci2mardi_dataset_mapping.txt")
-#    link_papers_with_datasets.submit(json_input=uci_dump_file_and_path, mapping_file=mapping_file).result()
+    logger.info("Processing dump: linking papers to datasets...")
+    mapping_file = str(Path(DATA_PATH) / "uci2mardi_dataset_mapping.txt")
+    link_papers_with_datasets.submit(json_input=uci_dump_file_and_path, mapping_file=mapping_file).result()
 
     # Link introductionary papers to datasets
     logger.info("Processing dump: linking introductionary papers to datasets...")
@@ -78,17 +80,17 @@ def process_datasets(
     ).wait()
 
     # Upload logfile and updated dump-file if needed
-#    logger.info("Uploading artifacts to lakeFS...")
-#    upload_artifacts.submit(
-#        dump_file_existed=dump_file_existed,
-#        dump_file_updated=dump_file_updated,
-#        uci_dump_file_and_path=uci_dump_file_and_path,
-#        logfile_name=logfile_name,
-#        secrets_path="secrets.conf",
-#        lakefs_url=lakefs_url,
-#        lakefs_repo=lakefs_repo,
-#        lakefs_path=lakefs_path,
-#    ).wait()
+    logger.info("Uploading artifacts to lakeFS...")
+    upload_artifacts.submit(
+        dump_file_existed=dump_file_existed,
+        dump_file_updated=dump_file_updated,
+        uci_dump_file_and_path=uci_dump_file_and_path,
+        logfile_name=logfile_name,
+        secrets_path="secrets.conf",
+        lakefs_url=lakefs_url,
+        lakefs_repo=lakefs_repo,
+        lakefs_path=lakefs_path,
+    ).wait()
 
     logger.info("Workflow complete.")
 

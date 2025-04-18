@@ -88,7 +88,7 @@ async def crawl_item(dataset_id: int) -> Dict:
             })
 
     # Get current UTC timestamp in ISO 8601 format
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(timezone.utc).replace(second=0, microsecond=0).isoformat().replace("+00:00", "Z")
 
     return {
         "dataset_id": dataset_id,
