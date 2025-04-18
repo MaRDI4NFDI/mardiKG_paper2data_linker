@@ -11,30 +11,28 @@ from tasks.ucimlrepo_kg_updates import link_publications_to_datasets_in_mardi_kg
 
 @task
 def link_papers_with_datasets(json_input: str, mapping_file: str) -> None:
-    """Processes a UCI Machine Learning Repository JSON dump and checks arXiv citations
-    in the MaRDI Knowledge Graph.
+    """
+    Processes a UCI Machine Learning Repository metadata file and links arXiv-referenced
+    publications to corresponding datasets in the MaRDI Knowledge Graph.
 
     The resulting list contains items describing a dataset from the UCI ML repo that
     has been cited in a publication and that publication is available in the MaRDI KG.
 
-    Main steps:
+    Main workflow:
     1. Loads a JSON file containing UCI dataset metadata and associated citations.
-    2. Filters datasets to those with valid citation data.
+    2. Filters out unapproved datasets and those without valid citations (arXiv, DOI, or URL).
     3. Further filters to datasets with at least one arXiv citation.
-    4. Queries the MaRDI KG for each arXiv ID and collects matched entries.
+    4. For each arXiv ID, queries the MaRDI KG to check if the publication exists.
+    5. Enriches matched publications with the QID of the cited dataset (if found via mapping).
+    6. Creates `P223` (cites work) links between the publication and dataset items in the KG,
+       with `P1689` (extracted from) references to the UCI dataset URL.
 
     Args:
-        json_input (str): Path to the input JSON file containing UCI dataset metadata.
-        mapping_file (str): Path to the file containing mapping between dataset IDs.
+        json_input (str): Path to the JSON file containing UCI dataset metadata and citations.
+        mapping_file (str): Path to the CSV mapping file with UCI dataset ID to MaRDI QID.
 
     Returns:
-        List[dict]: A list of entries with matched arXiv IDs and MaRDI QIDs, including:
-            - 'dataset_id' (int)
-            - 'dataset_name' (str)
-            - 'dataset_url' (str)
-            - 'arxiv_id' (str)
-            - 'arxiv_title' (str)
-            - 'QID' (str)
+        None
     """
 
     # Set logging

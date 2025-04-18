@@ -50,7 +50,6 @@ def process_datasets(
     uci_dataset_list = task.result()
     uci_dataset_ids = [d["id"] for d in uci_dataset_list]
 
-
     # Get dump - if not available locally, download or crawl
     uci_dump_filename = "uci_datasets_final.json"
     uci_dump_file_and_path = str(Path(DATA_PATH) / uci_dump_filename)
@@ -63,16 +62,15 @@ def process_datasets(
     )
     dump_file_existed = task.result()
 
-    # Check whether available dump should be updated
-    # TODO
+    # TODO: Check whether available dump should be updated
     task = update_dump.submit(
         uci_dump_file_and_path=uci_dump_file_and_path,
         uci_dataset_ids=uci_dataset_ids
     )
     dump_file_updated = task.result()
 
-    # Process dump
-    logger.info("Processing dump: linking papers with datasets...")
+    # Link papers to datasets
+    logger.info("Processing dump: linking papers to datasets...")
     mapping_file = str(Path(DATA_PATH) / "uci2mardi_dataset_mapping.txt")
     link_papers_with_datasets.submit(json_input=uci_dump_file_and_path, mapping_file=mapping_file)
 
