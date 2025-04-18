@@ -1,13 +1,16 @@
+import csv
 import json
 import os
 from pathlib import Path
-from typing import Set, List
+from typing import List, Dict
 from prefect import task, get_run_logger
+
 from mardiportal.workflowtools.mardikg_query import query_mardi_kg_for_arxivid
 
+from tasks.ucimlrepo_kg_updates import link_publications_to_datasets_in_mardi_kg
 
 @task
-def process_uci_ml_repo_dump(json_input: str) -> None:
+def link_papers_with_datasets(json_input: str, mapping_file: str) -> None:
     """Processes a UCI Machine Learning Repository JSON dump and checks arXiv citations
     in the MaRDI Knowledge Graph.
 
@@ -22,6 +25,7 @@ def process_uci_ml_repo_dump(json_input: str) -> None:
 
     Args:
         json_input (str): Path to the input JSON file containing UCI dataset metadata.
+        mapping_file (str): Path to the file containing mapping between dataset IDs.
 
     Returns:
         List[dict]: A list of entries with matched arXiv IDs and MaRDI QIDs, including:
@@ -55,12 +59,18 @@ def process_uci_ml_repo_dump(json_input: str) -> None:
         datasets_with_arxiv_citations, json_input + ".kg_entries")
     logger.info("Collected %d datasets to process", len(datasets_with_kg_entry))
 
+    # Add dataset QIDs to entries if the datasets exist in the KG
+    # Returns only entries for which a dataset QID exists
+    logger.info("Linking to KG datasets...")
+    hits = _get_dataset_qids_from_kg(entries=datasets_with_kg_entry, mapping_file=mapping_file)
+
+    # Perform linking in KG
+    link_publications_to_datasets_in_mardi_kg( hits )
+
     logger.info("Done.")
 
-    return datasets_with_kg_entry
 
-
-def _remove_datasets_without_citations(data: list[dict]) -> list[str]:
+def _remove_datasets_without_citations(data: list[dict]) -> list[dict]:
     """Filters UCI dataset entries to those with valid citations.
 
     This function:
@@ -191,7 +201,63 @@ def _get_datasets_available_in_kg(datasets_with_arxiv: List[dict], cache_path: s
 
     return found_results
 
+def _get_dataset_qids_from_kg(entries: List[Dict], mapping_file: str) -> List[Dict]:
+    """Enriches entries with the corresponding MaRDI dataset QID based on UCI dataset ID.
+
+    Each entry is expected to contain metadata for a paper linked to a UCI dataset.
+    Only entries that have a matching 'dataset_mardi_qid' in the mapping will be retained.
+
+    Args:
+        entries (List[Dict]): List of entries, each having the field 'dataset_id' (int)
+        mapping_file (str): Path to a CSV file mapping 'uci_id' to 'mardi_qid'.
+
+    Returns:
+        List[Dict]: Filtered list of entries, each with an added 'dataset_mardi_qid'.
+    """
+    logger = get_run_logger()
+    id_to_qid = _load_dataset_qid_mapping(mapping_file)
+    result = []
+
+    for entry in entries:
+        dataset_id = entry.get("dataset_id")
+        mardi_qid = id_to_qid.get(dataset_id)
+
+        if mardi_qid:
+            new_entry = dict(entry)
+            new_entry["dataset_mardi_QID"] = mardi_qid
+            result.append(new_entry)
+        else:
+            logger.warning(f"No MaRDI QID found for UCI dataset_id {dataset_id} — entry skipped.")
+
+    return result
+
+
+
+def _load_dataset_qid_mapping(mapping_file: str) -> Dict[int, str]:
+    """Loads a mapping from UCI dataset ID to MaRDI QID from a CSV file.
+
+    The CSV must have the following header:
+    dataset_name,uci_id,mardi_qid,mardi_dataset_name
+
+    Args:
+        mapping_file (str): Path to the CSV mapping file.
+
+    Returns:
+        Dict[int, str]: Mapping from UCI dataset_id to MaRDI QID.
+    """
+    mapping = {}
+    with open(mapping_file, newline='', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            try:
+                uci_id = int(row["uci_id"])
+                qid = row["mardi_qid"]
+                mapping[uci_id] = qid
+            except (ValueError, KeyError):
+                continue  # Skip malformed rows
+    return mapping
+
 
 
 if __name__ == "__main__":
-    process_uci_ml_repo_dump("../data/uci_datasets_final.json")
+    link_papers_with_datasets("../data/uci_datasets_final.json")
