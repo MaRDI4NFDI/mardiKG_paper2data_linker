@@ -59,10 +59,11 @@ def link_papers_with_datasets(json_input: str, mapping_file: str) -> None:
 
     # Add dataset QIDs to entries if the datasets exist in the KG
     # Returns only entries for which a dataset QID exists
-    logger.info("Linking to KG datasets...")
+    logger.info("Get dataset ID mapping...")
     hits = _get_dataset_qids_from_kg(entries=datasets_with_kg_entry, mapping_file=mapping_file)
 
     # Perform linking in KG
+    logger.info("Linking to KG datasets...")
     link_publications_to_datasets_in_mardi_kg( hits )
 
     logger.info("Done.")

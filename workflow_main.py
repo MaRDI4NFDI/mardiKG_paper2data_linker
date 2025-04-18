@@ -14,6 +14,7 @@ from tasks.upload import upload_ucidump_lakefs
 from tasks.ucimlrepo_get_dump import get_dump
 from tasks.ucimlrepo_get_datasets import get_available_datasets
 from tasks.ucimlrepo_update_dump import update_dump
+from tasks.ucimlrepo_link_intropapers_with_datasets import link_intropapers_with_datasets
 
 from utils.logger_helper import configure_prefect_logging_to_file
 
@@ -70,9 +71,14 @@ def process_datasets(
     dump_file_updated = task.result()
 
     # Link papers to datasets
-    logger.info("Processing dump: linking papers to datasets...")
+#    logger.info("Processing dump: linking papers to datasets...")
+#    mapping_file = str(Path(DATA_PATH) / "uci2mardi_dataset_mapping.txt")
+#    link_papers_with_datasets.submit(json_input=uci_dump_file_and_path, mapping_file=mapping_file)
+
+    # Link introductionary papers to datasets
+    logger.info("Processing dump: linking introductionary papers to datasets...")
     mapping_file = str(Path(DATA_PATH) / "uci2mardi_dataset_mapping.txt")
-    link_papers_with_datasets.submit(json_input=uci_dump_file_and_path, mapping_file=mapping_file)
+    link_intropapers_with_datasets.submit(json_input=uci_dump_file_and_path, mapping_file=mapping_file)
 
     # Upload new dump file to lakeFS - if needed
     if not dump_file_existed or dump_file_updated:
