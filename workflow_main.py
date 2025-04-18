@@ -5,20 +5,15 @@ import getpass
 import socket
 import logging
 
-from mardiportal.workflowtools import read_credentials
 from prefect import flow, get_run_logger
 from pathlib import Path
 
-from tasks.ucimlrepo_link_papers_with_datasets import link_papers_with_datasets
-from tasks.upload import upload_ucidump_lakefs
 from tasks.ucimlrepo_get_dump import get_dump
 from tasks.ucimlrepo_get_datasets import get_available_datasets
 from tasks.ucimlrepo_update_dump import update_dump
 from tasks.ucimlrepo_link_intropapers_with_datasets import link_intropapers_with_datasets
 
 from utils.logger_helper import configure_prefect_logging_to_file
-
-from mardiportal.workflowtools.lake_client import upload_and_commit_to_lakefs
 
 # Set paths
 DATA_PATH="./data" # Path where intermediate data and the database file should be stored locally.
@@ -82,32 +77,18 @@ def process_datasets(
         json_input=uci_dump_file_and_path, mapping_file=mapping_file
     ).wait()
 
-    # Upload new dump file to lakeFS - if needed
-    if not dump_file_existed or dump_file_updated:
-        logger.info("Upload new dump file to lakeFS...")
-        upload_ucidump_lakefs.submit(
-            path_and_file=str(uci_dump_file_and_path),
-            lakefs_url=lakefs_url,
-            lakefs_repo=lakefs_repo,
-            lakefs_path=lakefs_path,
-            msg="Upload new version of dump file"
-        ).wait()
-
-    # Upload logfile to lakeFS
-    creds = read_credentials("lakefs")
-    if creds:
-        logger.info("Upload logfile to lakeFS...")
-        upload_and_commit_to_lakefs(
-            path_and_file=logfile_name,
-            lakefs_url=lakefs_url,
-            lakefs_repo=lakefs_repo,
-            lakefs_path=lakefs_path,
-            msg="Logfile from current run",
-            lakefs_user=creds["user"],
-            lakefs_pwd=creds["password"],
-        )
-    else:
-        logger.error("No valid credentials found for lakeFS. Skipping upload.")
+    # Upload logfile and updated dump-file if needed
+#    logger.info("Uploading artifacts to lakeFS...")
+#    upload_artifacts.submit(
+#        dump_file_existed=dump_file_existed,
+#        dump_file_updated=dump_file_updated,
+#        uci_dump_file_and_path=uci_dump_file_and_path,
+#        logfile_name=logfile_name,
+#        secrets_path="secrets.conf",
+#        lakefs_url=lakefs_url,
+#        lakefs_repo=lakefs_repo,
+#        lakefs_path=lakefs_path,
+#    ).wait()
 
     logger.info("Workflow complete.")
 

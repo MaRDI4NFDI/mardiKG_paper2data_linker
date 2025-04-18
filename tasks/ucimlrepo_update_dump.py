@@ -4,9 +4,11 @@ from typing import List
 
 from prefect import task
 
+from tasks.ucimlrepo_crawl import crawl_item
+
 
 @task
-def update_dump(uci_dump_file_and_path: str, uci_dataset_ids: List[int], ) -> bool:
+async def update_dump(uci_dump_file_and_path: str, uci_dataset_ids: List[int], ) -> bool:
     """Checks whether all given dataset IDs are present in a JSON file.
 
     Args:
@@ -31,8 +33,11 @@ def update_dump(uci_dump_file_and_path: str, uci_dataset_ids: List[int], ) -> bo
 
     print(f"Missing dataset_id(s): {missing}")
 
+    # TODO: add logic for inserting into JSON dump
     for dataset_id in missing:
         # Crawl entry
+        item_metadata = await crawl_item(dataset_id)
 
+        print( item_metadata )
 
     return True
