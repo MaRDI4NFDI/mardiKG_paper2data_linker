@@ -4,7 +4,7 @@ from typing import List
 from mardiportal.workflowtools import read_credentials, LakeClient
 from prefect import task, get_run_logger
 
-from tasks.ucimlrepo_crawl import start_ucimlrepo_crawl
+from tasks.ucimlrepo_crawl import start_ucimlrepo_full_crawl
 
 @task
 def get_dump(
@@ -36,7 +36,7 @@ def get_dump(
                    "starting full crawl ...")
 
     # Start full crawl with IDs from the API call
-    start_ucimlrepo_crawl.submit(
+    start_ucimlrepo_full_crawl.submit(
         uci_dump_file=uci_dump_file_and_path, dataset_id_list=uci_dataset_ids
     ).wait()
 

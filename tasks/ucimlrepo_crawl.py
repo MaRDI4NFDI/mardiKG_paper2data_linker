@@ -3,6 +3,7 @@
 
 import asyncio
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict
 
@@ -13,6 +14,90 @@ import os
 from crawl4ai import AsyncWebCrawler, CacheMode, CrawlerRunConfig
 from prefect import task, get_run_logger
 
+@task
+async def start_ucimlrepo_full_crawl(uci_dump_file: str, dataset_id_list: List[int]):
+    """Main asynchronous entry point for processing UCI datasets.
+
+    Iterates through datasets, enriches metadata, and saves progress incrementally.
+    """
+    progress_suffix = '_progress'
+    logger = get_run_logger()
+    logger.info("Starting crawl...")
+
+    if Path(uci_dump_file + progress_suffix).is_file():
+        results, start_id = load_progress(uci_dump_file + progress_suffix)
+        logger.info(f"Resuming from dataset ID {start_id}")
+    else:
+        results = []
+
+    for dataset_id in dataset_id_list:
+        try:
+            result = await crawl_item(dataset_id)
+            results.append(result)
+
+            if dataset_id % 10 == 0:
+                save_progress(results, uci_dump_file + progress_suffix)
+
+        except Exception as e:
+            logger.warning(f"Error processing dataset {dataset_id}: {e}")
+
+    save_progress(results, uci_dump_file)
+
+
+async def crawl_item(dataset_id: int) -> Dict:
+    """
+    Crawls metadata for a single UCI dataset including intro paper, citations, and basic info.
+
+    Args:
+        dataset_id (int): The UCI dataset ID to crawl.
+
+    Returns:
+        Dict: A dictionary containing dataset_id, dataset_name, dataset_url, intro_paper, and citations.
+    """
+    logger = get_run_logger()
+    logger.info(f"Processing dataset ID {dataset_id}")
+
+    # Get intro paper from UCI API
+    intro_paper = get_dataset_intro_paper(dataset_id)
+
+    # Get detailed metadata from HTML page
+    metadata_md = await get_dataset_metadata_as_md(dataset_id)
+    dataset_name = get_name_from_metadata_md(metadata_md)
+    dataset_url = get_url_from_metadata_md(metadata_md)
+    citations = get_citations_from_metadata_md(metadata_md)
+
+    enriched_citations = []
+    for citation in citations:
+        paper_id = extract_corpus_id(citation["url"])
+        if not paper_id:
+            continue
+
+        api_url = (
+            f"https://api.semanticscholar.org/graph/v1/paper/{paper_id}"
+            f"?fields=title,url,externalIds"
+        )
+        response = requests.get(api_url)
+        if response.status_code == 200:
+            paper_info = response.json()
+            enriched_citations.append({
+                "title": paper_info.get("title"),
+                "url": paper_info.get("url"),
+                "doi": paper_info.get("externalIds", {}).get("DOI"),
+                "arxiv": paper_info.get("externalIds", {}).get("ArXiv")
+            })
+
+    # Get current UTC timestamp in ISO 8601 format
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    return {
+        "dataset_id": dataset_id,
+        "checked_timestamp": timestamp,
+        "updated_timestamp": timestamp,
+        "dataset_name": dataset_name,
+        "dataset_url": dataset_url,
+        "intro_paper": intro_paper,
+        "citations": enriched_citations
+    }
 
 def extract_citations(text):
     """Extracts citation links from the markdown metadata.
@@ -180,73 +265,5 @@ def load_progress(path):
             return [], 0
 
 
-@task
-async def start_ucimlrepo_crawl(uci_dump_file: str, dataset_id_list: List[int]):
-    """Main asynchronous entry point for processing UCI datasets.
-
-    Iterates through datasets, enriches metadata, and saves progress incrementally.
-    """
-    progress_suffix = '_progress'
-
-    logger = get_run_logger()
-    logger.info("Starting crawl...")
-
-    if Path(uci_dump_file + progress_suffix).is_file():
-        results, start_id = load_progress(uci_dump_file + progress_suffix)
-        logger.info(f"Resuming from dataset ID {start_id}")
-    else:
-        results = []
-
-    for dataset_id in dataset_id_list:
-        try:
-            logger.info(f"Processing dataset ID {dataset_id}")
-
-            # Get intro paper from API
-            intro_paper = get_dataset_intro_paper(dataset_id)
-
-            # Get more info from dataset html-page crawl
-            metadata_md = await get_dataset_metadata_as_md(dataset_id)
-            dataset_name = get_name_from_metadata_md(metadata_md)
-            dataset_url = get_url_from_metadata_md(metadata_md)
-            citations = get_citations_from_metadata_md(metadata_md)
-
-            enriched_citations = []
-            for citation in citations:
-                paper_id = extract_corpus_id(citation["url"])
-                if not paper_id:
-                    continue
-
-                api_url = (
-                    f"https://api.semanticscholar.org/graph/v1/paper/{paper_id}"
-                    f"?fields=title,url,externalIds"
-                )
-                response = requests.get(api_url)
-                if response.status_code == 200:
-                    paper_info = response.json()
-                    enriched_citations.append({
-                        "title": paper_info.get("title"),
-                        "url": paper_info.get("url"),
-                        "doi": paper_info.get("externalIds", {}).get("DOI"),
-                        "arxiv": paper_info.get("externalIds", {}).get("ArXiv")
-                    })
-
-            results.append({
-                "dataset_id": dataset_id,
-                "dataset_name": dataset_name,
-                "dataset_url": dataset_url,
-                "intro_paper": intro_paper,
-                "citations": enriched_citations
-            })
-
-            if dataset_id % 10 == 0:
-                save_progress(results, uci_dump_file + progress_suffix)
-
-        except Exception as e:
-            print(f"Error processing dataset {dataset_id}: {e}")
-
-    # Save finale version
-    save_progress(results, uci_dump_file)
-
-
 if __name__ == "__main__":
-    asyncio.run(start_ucimlrepo_crawl("../data/uci_datasets_progress.json"))
+    asyncio.run(start_ucimlrepo_full_crawl("../data/uci_datasets_progress.json"))

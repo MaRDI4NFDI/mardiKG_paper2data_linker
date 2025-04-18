@@ -73,12 +73,14 @@ def process_datasets(
     # Link papers to datasets
 #    logger.info("Processing dump: linking papers to datasets...")
 #    mapping_file = str(Path(DATA_PATH) / "uci2mardi_dataset_mapping.txt")
-#    link_papers_with_datasets.submit(json_input=uci_dump_file_and_path, mapping_file=mapping_file)
+#    link_papers_with_datasets.submit(json_input=uci_dump_file_and_path, mapping_file=mapping_file).result()
 
     # Link introductionary papers to datasets
     logger.info("Processing dump: linking introductionary papers to datasets...")
     mapping_file = str(Path(DATA_PATH) / "uci2mardi_dataset_mapping.txt")
-    link_intropapers_with_datasets.submit(json_input=uci_dump_file_and_path, mapping_file=mapping_file)
+    link_intropapers_with_datasets.submit(
+        json_input=uci_dump_file_and_path, mapping_file=mapping_file
+    ).wait()
 
     # Upload new dump file to lakeFS - if needed
     if not dump_file_existed or dump_file_updated:
