@@ -5,7 +5,8 @@ from pathlib import Path
 from typing import List, Dict
 from prefect import task, get_run_logger
 
-from mardiportal.workflowtools.mardikg_query import query_mardi_kg_for_arxivid
+from mardiportal.workflowtools.mardikg_query import query_mardi_kg_for_arxivid, \
+    query_mardi_kg_for_doi
 
 from tasks.ucimlrepo_kg_updates import link_publications_to_datasets_in_mardi_kg
 
@@ -46,15 +47,17 @@ def link_papers_with_datasets(json_input: str, mapping_file: str) -> None:
     with open(json_input, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # Filter for datasets with arXiv citations
+    # Remove items without citations
     datasets_with_citations = _remove_datasets_without_citations(data)
-    datasets_with_arxiv_citations = _get_datasets_with_arxiv_citations( datasets_with_citations )
-    logger.info("Collected %d datasets to check", len(datasets_with_arxiv_citations))
 
-    # Check for entries for which the arXiv IDs are found in the MaRDI Knowledge Graph
-    # and adds the QIDs for the found (arXiv) publications
+    # Filter for datasets with arXiv or DOI citations
+    datasets_with_valid_citations = _get_datasets_with_valid_citations(datasets_with_citations)
+    logger.info("Collected %d datasets to check", len(datasets_with_valid_citations))
+
+    # Check for entries (with arxiv od DOI entry) available in the MaRDI Knowledge Graph
+    # and adds the QIDs for the found publications
     datasets_with_kg_entry = _get_datasets_available_in_kg(
-        datasets_with_arxiv_citations, json_input + ".kg_entries")
+        datasets_with_valid_citations, json_input + ".kg_entries")
     logger.info("Collected %d datasets to process", len(datasets_with_kg_entry))
 
     # Add dataset QIDs to entries if the datasets exist in the KG
@@ -125,34 +128,54 @@ def _remove_datasets_without_citations(data: list[dict]) -> list[dict]:
     return datasets_to_process
 
 
-def _get_datasets_with_arxiv_citations(data: list[dict]) -> list[dict]:
-    """Filters datasets to only those with at least one citation containing an arXiv ID.
+def _get_datasets_with_valid_citations(data: list[dict]) -> list[dict]:
+    """Filters datasets to only those with at least one citation containing an arXiv or DOI ID.
 
     Args:
         data (list[dict]): List of dataset entries, each with a list of citations.
 
     Returns:
-        list[dict]: Filtered list of datasets with at least one arXiv citation.
+        list[dict]: Filtered list of datasets with at least one arXiv or DOI citation.
     """
-    datasets_with_arxiv = []
+    datasets_with_arxiv_or_doi = []
+
+    doi_count = 0
+    arxiv_count = 0
+    arxiv_and_doi_count = 0
 
     for entry in data:
         has_arxiv = any(c.get("arxiv") for c in entry.get("citations", []))
+        has_doi = any(c.get("doi") for c in entry.get("citations", []))
+        if has_arxiv or has_doi:
+            datasets_with_arxiv_or_doi.append(entry)
+
+        if has_doi:
+            doi_count += 1
+
         if has_arxiv:
-            datasets_with_arxiv.append(entry)
+            arxiv_count += 1
 
-    return datasets_with_arxiv
+        if has_doi and has_arxiv:
+            arxiv_and_doi_count += 1
 
 
-def _get_datasets_available_in_kg(datasets_with_arxiv: List[dict], cache_path: str) -> List[dict]:
-    """Checks which arXiv IDs from the UCI citations are found in the MaRDI Knowledge Graph.
+    get_run_logger().info(f"Found {doi_count} DOI and {arxiv_count} arXiv citations. "
+                          f"And {arxiv_and_doi_count} with both.")
 
-    For each arXiv ID in the dataset's citations, it queries the MaRDI KG using the MediaWiki API.
+    return datasets_with_arxiv_or_doi
+
+
+def _get_datasets_available_in_kg(
+        datasets_with_arxiv_or_doi: List[dict], cache_path: str
+) -> List[dict]:
+    """Checks which arXiv or DOI IDs from the UCI citations are found in the MaRDI Knowledge Graph.
+
+    For each ID in the dataset's citations, it queries the MaRDI KG using the MediaWiki API.
     Matching results are collected and enriched with the corresponding QID.
     Uses a local cache to avoid re-querying already-processed IDs.
 
     Args:
-        datasets_with_arxiv (List[dict]): List of dataset entries with arXiv citations.
+        datasets_with_arxiv_or_doi (List[dict]): List of dataset entries with citation IDs.
         cache_path (str): Path to a local JSON file for caching previous query results.
 
     Returns:
@@ -169,18 +192,26 @@ def _get_datasets_available_in_kg(datasets_with_arxiv: List[dict], cache_path: s
 
     found_results = []
 
-    for dataset_entry in datasets_with_arxiv:
+    for dataset_entry in datasets_with_arxiv_or_doi:
         for citation in dataset_entry.get("citations", []):
+
             arxiv_id = citation.get("arxiv")
-            if not arxiv_id:
+            doi = citation.get("doi")
+
+            if not arxiv_id and not doi:
                 continue
 
             try:
                 logger.info(f"Checking dataset '{dataset_entry['dataset_name']}' and "
-                            f"citation with arXiv ID '{arxiv_id}'")
-                results = query_mardi_kg_for_arxivid(arxiv_id)
+                            f"citation with arXiv ID '{arxiv_id}' and doi '{doi}'")
+
+                if arxiv_id:
+                    results = query_mardi_kg_for_arxivid(arxiv_id)
+                elif doi:
+                    results = query_mardi_kg_for_doi(doi)
+
                 if results:
-                    logger.info(f"arXiv:{arxiv_id} found {len(results)} result(s) in MaRDI KG")
+                    logger.info(f"arXiv:{arxiv_id} / doi:{doi} found {len(results)} result(s) in MaRDI KG")
 
                     # Preserve original fields from entry except "citation" & "intro_paper"
                     # and add info about found citation
@@ -188,12 +219,13 @@ def _get_datasets_available_in_kg(datasets_with_arxiv: List[dict], cache_path: s
                         **{k: v for k, v in dataset_entry.items() if k not in ("citations", "intro_paper")},
                         "arxiv_title": citation.get("title"),
                         "arxiv_id": citation.get("arxiv"),
+                        "doi": citation.get("doi"),
                         "publication_mardi_QID": results[0]["qid"]
                     }
 
                     found_results.append(combined_entry)
             except Exception as e:
-                logger.warning(f"Query failed for arXiv:{arxiv_id} — {e}")
+                logger.warning(f"Query failed for arXiv:{arxiv_id} / doi:{doi} — {e}")
 
     with open(cache_path, "w", encoding="utf-8") as f:
         json.dump(found_results, f, indent=2, ensure_ascii=False)
@@ -259,4 +291,7 @@ def _load_dataset_qid_mapping(mapping_file: str) -> Dict[int, str]:
 
 
 if __name__ == "__main__":
-    link_papers_with_datasets("../data/uci_datasets_final.json")
+    link_papers_with_datasets(
+        "../data/uci_datasets_final.json",
+        "../data/uci2mardi_dataset_mapping.txt"
+    )
