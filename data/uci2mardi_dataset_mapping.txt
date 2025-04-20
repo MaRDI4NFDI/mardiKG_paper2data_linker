@@ -1,10 +1,17 @@
 uci_dataset_name,uci_id,mardi_qid,mardi_dataset_name
 Abalone,1,Q6036118,abalone
 Adult,2,Q6032980,adult
+Credit Approval,27,Q6032881,credit-approval
+Dermatology,33,Q6032889,dermatology
 Diabetes,34,Q6036315,diabetes
+Glass Identification,42,Q6036843,Glass-Classification
 Iris,53,Q6036931,IRIS-flower-dataset
 Spambase,94,Q6032900,spambase
 Wine,109,Q6036789,Red-Wine-Quality
+Blood Transfusion Service Center,176,Q6034045,blood-transfusion-service-center
+Cardiotocography,193,Q6034047,cardiotocography
 Forest Fires,162,Q6036900,Forest-Fires-Data-Set-Portugal
 Plants,180,Q6034069,one-hundred-plants-margin
+Skin Segmentation,229,Q6034080,skin-segmentation
 Banknote Authentication,267,Q6034043,banknote-authentication
+Online Retail,352,Q6036471,Online-Retail-II-UCI
