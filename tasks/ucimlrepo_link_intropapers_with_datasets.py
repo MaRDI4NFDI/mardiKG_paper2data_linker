@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List, Dict
 
 from mardiportal.workflowtools import query_mardi_kg_for_arxivid
+from mardiportal.workflowtools.mardikg_query import query_mardi_kg_for_doi
 from prefect import task, get_run_logger
 
 from tasks.ucimlrepo_kg_updates import link_publications_to_datasets_in_mardi_kg
@@ -85,7 +86,7 @@ def link_intropapers_with_datasets(json_input: str, mapping_file: str) -> List[D
 
 def _get_intro_papers_available_in_kg(datasets_with_intro_papers: List[Dict]) -> List[Dict]:
     """
-    For each dataset with an intro paper (containing an arXiv ID), checks if that arXiv ID
+    For each dataset with an intro paper (containing an DOI or arXiv ID), checks if arXiv / DOI
     is present in the MaRDI Knowledge Graph.
 
     Args:
@@ -101,16 +102,23 @@ def _get_intro_papers_available_in_kg(datasets_with_intro_papers: List[Dict]) ->
 
     for entry in datasets_with_intro_papers:
         intro_paper = entry.get("intro_paper", {})
-        arxiv_id = intro_paper.get("arxiv")
 
-        if not arxiv_id:
+        arxiv_id = intro_paper.get("arxiv")
+        doi = intro_paper.get("DOI")
+
+        if not arxiv_id and not doi:
             continue
 
         try:
-            logger.info(f"Querying KG for arXiv ID: {arxiv_id}")
-            results = query_mardi_kg_for_arxivid(arxiv_id)
+            logger.info(f"Querying KG for arXiv ID: {arxiv_id} / DOI: {doi}")
+
+            if arxiv_id:
+                results = query_mardi_kg_for_arxivid(arxiv_id)
+            elif doi:
+                results = query_mardi_kg_for_doi(doi)
+
             if results:
-                logger.info(f"Found {len(results)} result(s) for arXiv:{arxiv_id} in KG")
+                logger.info(f"Found {len(results)} result(s) for arXiv:{arxiv_id} / DOI:{doi} in KG")
 
                 intro_paper["publication_mardi_QID"] = results[0]["qid"]
 
@@ -124,7 +132,7 @@ def _get_intro_papers_available_in_kg(datasets_with_intro_papers: List[Dict]) ->
                 found_results.append(combined_entry)
 
         except Exception as e:
-            logger.warning(f"Query failed for arXiv ID {arxiv_id}: {e}")
+            logger.warning(f"Query failed for arXiv ID {arxiv_id} / DOI: {doi}: {e}")
 
     return found_results
 
