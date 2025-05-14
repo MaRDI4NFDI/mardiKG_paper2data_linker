@@ -8,6 +8,11 @@
 #   * Click on the workflow name
 #   * Click on "+ Schedule" (top right corner)
 
+# Run this for LOCAL execution:
+#   prefect config unset PREFECT_API_URL
+#   prefect config set PREFECT_API_URL=http://127.0.0.1:4200/api
+#   prefect server start
+
 from prefect import flow
 
 if __name__ == "__main__":
@@ -25,10 +30,11 @@ if __name__ == "__main__":
         job_variables={"pip_packages": [
             "boto3",
             "botocore",
-            "crawl4ai==0.4.248",
+            "httpx",
             "ijson",
             "lakefs-sdk",
             "minio",
+            "selectolax",
             "git+https://github.com/MaRDI4NFDI/mardiclient.git",
             "git+https://github.com/MaRDI4NFDI/mardiportal-workflowtools.git"
         ]},

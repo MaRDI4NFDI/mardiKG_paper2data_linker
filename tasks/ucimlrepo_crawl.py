@@ -2,17 +2,19 @@
 # -> crawl4ai-setup
 
 import asyncio
+import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict
 
+import httpx
 import requests
 import json
 import os
 
-from crawl4ai import AsyncWebCrawler, CacheMode, CrawlerRunConfig
 from prefect import task, get_run_logger
+from selectolax.parser import HTMLParser
 
 @task
 async def start_ucimlrepo_full_crawl(uci_dump_file: str, dataset_id_list: List[int]):
@@ -55,7 +57,14 @@ async def crawl_item(dataset_id: int) -> Dict:
         Dict: A dictionary containing:
               dataset_id, dataset_name, dataset_url, intro_paper, citations and timestamps.
     """
-    logger = get_run_logger()
+
+    # Get logger
+    logger = None
+    try:
+        logger = get_run_logger()
+    except RuntimeError:
+        logger = logging.getLogger(__name__)
+
     logger.info(f"Processing dataset ID {dataset_id}")
 
     # Get intro paper from UCI API
@@ -112,7 +121,7 @@ def _extract_citations(text):
     Returns:
         list[dict]: A list of dictionaries with 'title' and 'url' keys.
     """
-    match = re.search(r"# Papers Citing this Dataset(.*?)# Reviews", text, re.DOTALL)
+    match = re.search(r"# Papers Citing this Dataset(.*?)(?:\n# |\Z)", text, re.DOTALL)
     if not match:
         return []
 
@@ -127,21 +136,78 @@ def _extract_citations(text):
 
 
 async def _get_dataset_metadata_as_md(dataset_id: int) -> str:
-    """Fetches the markdown metadata for a dataset using a web crawler.
+    """Fetches dataset metadata from UCI ML Repo and formats it as markdown."""
+    url = f"https://archive.ics.uci.edu/dataset/{dataset_id}/"
 
-    Args:
-        dataset_id (int): The dataset ID to fetch.
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        response = await client.get(url)
+        if response.status_code != 200:
+            raise Exception(f"Failed to fetch dataset page: {response.status_code}")
+        html_text = response.text
+        html = HTMLParser(html_text)
 
-    Returns:
-        str: The raw markdown content of the dataset page.
-    """
-    crawler_run_config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
-    async with AsyncWebCrawler() as crawler:
-        result = await crawler.arun(
-            url=f"https://archive.ics.uci.edu/dataset/{dataset_id}/",
-            config=crawler_run_config
-        )
-        return result.markdown_v2.raw_markdown
+    content = []
+
+    # --- Dataset Name from <title> tag ---
+    title_match = re.search(r"<title>(.*?)</title>", html_text)
+    if title_match:
+        name = title_match.group(1).replace(" - UCI Machine Learning Repository", "").strip()
+        content.append(f"# {name}")
+    else:
+        content.append("# Unknown Dataset")
+
+    # --- Dataset URL ---
+    content.append(f"[](https://archive.ics.uci.edu/dataset/{dataset_id}/<UCI Dataset Page>)")
+
+    # --- DOI (needed for URL) ---
+    doi_match = re.search(r'https://doi\.org/10\.\d{4,9}/[-._;()/:A-Z0-9]+', html_text, re.IGNORECASE)
+    if doi_match:
+        doi_url = doi_match.group(0).rstrip(".")
+        content.append("## DOI")
+        content.append(f"[{doi_url}]({doi_url})")
+
+    # --- BibTeX Citation ---
+    bibtex_match = re.search(r'"BibTeX":"(.*?)"}', html_text)
+    if bibtex_match:
+        bibtex_raw = bibtex_match.group(1)
+        bibtex = bibtex_raw.encode("utf-8").decode("unicode_escape")
+        content.append("## BibTeX Citation")
+        content.append(f"```bibtex\n{bibtex}\n```")
+
+    # --- File list ---
+    files_match = re.search(r'"headers":\["File","Size"\],"data":(\[\[.*?\]\])', html_text)
+    if files_match:
+        try:
+            files_json = json.loads(files_match.group(1))
+            content.append("## Files")
+            for name, size in files_json:
+                content.append(f"- **{name}** ({size})")
+        except Exception:
+            pass
+
+    # --- Creators ---
+    creators = [p.text(strip=True) for p in html.css("p.font-semibold") if p.parent and "Creators" in p.parent.parent.text()]
+    if creators:
+        content.append("## Creators")
+        for creator in creators:
+            content.append(f"- {creator}")
+
+    # --- Citing Papers (for downstream _extract_citations) ---
+    paper_blocks = html.css("a.text-primary.underline")
+    citing_papers = []
+    for block in paper_blocks:
+        title = block.text(strip=True)
+        url = block.attributes.get("href")
+        if title and url and url.startswith("http"):
+            citing_papers.append((title, url))
+
+    if citing_papers:
+        content.append("# Papers Citing this Dataset")
+        for title, url in citing_papers:
+            content.append(f"[{title}](<{url}>)")
+
+    return "\n\n".join(content)
+
 
 
 def _extract_corpus_id(url):
@@ -267,4 +333,21 @@ def _load_progress(path):
 
 
 if __name__ == "__main__":
-    asyncio.run(start_ucimlrepo_full_crawl("../data/uci_datasets_progress.json"))
+    # asyncio.run(start_ucimlrepo_full_crawl("../data/uci_datasets_progress.json"))
+
+    result = asyncio.run( crawl_item(5) )
+    print( result )
+
+    """
+    metadata_md = asyncio.run(_get_dataset_metadata_as_md(5))
+    dataset_name = _get_name_from_metadata_md(metadata_md)
+    dataset_url = _get_url_from_metadata_md(metadata_md)
+    citations = _get_citations_from_metadata_md(metadata_md)
+
+    print( f"result: {metadata_md}")
+
+    print( f"ds name: {dataset_name}" )
+    print( f"ds url : {dataset_url}")
+    print( "citations" )
+    print( citations )
+    """
