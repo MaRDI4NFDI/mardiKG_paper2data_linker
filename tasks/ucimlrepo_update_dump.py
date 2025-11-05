@@ -31,6 +31,7 @@ async def update_dump(uci_dump_file_and_path: str, uci_dataset_ids: List[int] ) 
 
     # If no new dataset has been found: return "False"
     if not missing:
+        logger.info(f"UCI dump seems up-to-date. It contains {len(available_ids)} entries.")
         return False
 
     logger.info(f"Missing dataset_id(s): {missing}")

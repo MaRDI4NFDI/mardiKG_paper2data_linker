@@ -1,10 +1,12 @@
+import logging
 import json
 import ssl
 import urllib
 from typing import Optional, List, Dict
 
 import certifi
-from prefect import task
+from prefect import task, get_run_logger
+from prefect.exceptions import MissingContextError
 
 API_BASE_URL = 'https://archive.ics.uci.edu/api/dataset'
 API_LIST_URL = 'https://archive.ics.uci.edu/api/datasets/list'
@@ -26,6 +28,9 @@ def get_available_datasets(
     Returns:
         List[Dict]: A list of available dataset metadata dictionaries.
     """
+    logger = get_logger_safe()
+    logger.info("Checking for UCI entries...")
+
     # Validate inputs
     if filter and not isinstance(filter, str):
         raise ValueError("Filter must be a string")
@@ -47,6 +52,8 @@ def get_available_datasets(
     api_list_url = API_LIST_URL + "?" + urllib.parse.urlencode(query_params)
     print(api_list_url)
 
+    logger.info(f"UCI API call: {api_list_url}")
+
     try:
         response = urllib.request.urlopen(
             api_list_url,
@@ -61,15 +68,29 @@ def get_available_datasets(
         raise ValueError(error_msg)
 
     data = resp_json.get("data", [])
+    data_ids = [d["id"] for d in data]
+
+    logger.info(f"Found {len(data_ids)} datasets in result.")
 
     return data
 
 
+def get_logger_safe():
+    """
+    Returns a logger either from Prefect or a standard logger, if run locally.
+    """
+    try:
+        return get_run_logger()
+    except MissingContextError:
+        logging.basicConfig(level=logging.INFO)
+        return logging.getLogger("local")
+
+
 if __name__ == "__main__":
-    datasets = get_available_datasets(filter="python", search="iris")
+    datasets = get_available_datasets.fn(filter="python", search="iris")
     for ds in datasets:
         print(f"{ds['id']:>3} - {ds['name']}")
 
-    datasets = get_available_datasets()
+    datasets = get_available_datasets.fn()
     for ds in datasets:
         print(f"{ds['id']:>3} - {ds['name']}")
