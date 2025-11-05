@@ -124,6 +124,3 @@ def test_link_publications_to_datasets_adds_p223_claim(monkeypatch):
     references = claim_payload["references"]
     assert references[0]["snaks"]["P1689"][0]["datavalue"]["value"] == "https://example.org/uci-dataset"
 
-
-def test_add_claim_to_dummy_item():
-    pass
