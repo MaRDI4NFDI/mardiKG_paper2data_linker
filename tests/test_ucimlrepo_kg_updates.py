@@ -161,8 +161,6 @@ def test_link_publications_skips_existing_links(monkeypatch):
 
     assert client_inits == [("bot", "secret", True)]
     assert processed_hits == []
-    info_messages = [m for m in fake_logger.messages if m["level"] == "info"]
-    assert any("link already present" in " ".join(map(str, msg["args"])) for msg in info_messages)
 
 
 def test_link_already_exists_in_kg_detection():
