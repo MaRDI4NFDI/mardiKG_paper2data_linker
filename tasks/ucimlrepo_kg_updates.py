@@ -31,6 +31,8 @@ def link_publications_to_datasets_in_mardi_kg(
         logger.error("No valid credentials found. Please check '%s'", secrets_path)
         return
 
+    logger.info(f"Using credentials: '{mask(creds['user'])}' / {mask(creds['password'])}")
+
     # Initialize MaRDI KG client
     mc = MardiClient(user=creds["user"], password=creds["password"], login_with_bot=True)
 
@@ -57,8 +59,7 @@ def _process_hit(hit: Dict, mc: MardiClient) -> None:
         mc (MardiClient): An authenticated instance of the MaRDI client used to access the KG.
     """
 
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
+    logger = get_run_logger()
 
     dataset_uci_url = hit['dataset_url']
     dataset_mardi_QID = hit['dataset_mardi_QID']
@@ -98,3 +99,16 @@ def _update_kg_item_with_repo(
 
     # Write the new data
     item.write()
+
+
+def mask(s: str) -> str:
+    """Masks given string; only shows beginning and end.
+
+    Args:
+        s: String to be masked
+
+    Returns: masked string
+    """
+    if not s:
+        return ""
+    return s if len(s) <= 10 else f"{s[:5]}*****{s[-5:]}"
