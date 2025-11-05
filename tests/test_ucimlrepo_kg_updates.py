@@ -100,6 +100,7 @@ def test_link_publications_to_datasets_adds_p223_claim(monkeypatch):
             self.item = FakeItemEndpoint()
 
     monkeypatch.setattr(kg_updates, "MardiClient", FakeClient)
+    monkeypatch.setattr(kg_updates, "_link_already_exists_in_kg", lambda mc, pub, ds: False)
 
     hit = {
         "dataset_url": "https://example.org/uci-dataset",
@@ -121,4 +122,78 @@ def test_link_publications_to_datasets_adds_p223_claim(monkeypatch):
     assert claim_payload["mainsnak"]["datavalue"]["value"]["id"] == "Q456"
     references = claim_payload["references"]
     assert references[0]["snaks"]["P1689"][0]["datavalue"]["value"] == "https://example.org/uci-dataset"
+
+
+def test_link_publications_skips_existing_links(monkeypatch):
+    fake_logger = _FakeLogger()
+    monkeypatch.setattr(kg_updates, "get_run_logger", lambda: fake_logger)
+
+    monkeypatch.setattr(
+        kg_updates,
+        "read_credentials",
+        lambda namespace, secrets_path: {"user": "bot", "password": "secret"},
+    )
+
+    processed_hits = []
+    monkeypatch.setattr(kg_updates, "_process_hit", lambda hit, mc: processed_hits.append(hit))
+    monkeypatch.setattr(kg_updates, "_link_already_exists_in_kg", lambda mc, pub, ds: True)
+
+    client_inits = []
+
+    class FakeItemEndpoint:
+        def get(self, entity_id: str):
+            raise AssertionError("Item retrieval should be skipped when link exists")
+
+    class FakeClient:
+        def __init__(self, user: str, password: str, login_with_bot: bool):
+            client_inits.append((user, password, login_with_bot))
+            self.item = FakeItemEndpoint()
+
+    monkeypatch.setattr(kg_updates, "MardiClient", FakeClient)
+
+    hit = {
+        "dataset_url": "https://example.org/uci-dataset",
+        "dataset_mardi_QID": "Q456",
+        "publication_mardi_QID": "Q123",
+    }
+
+    kg_updates.link_publications_to_datasets_in_mardi_kg.fn([hit])
+
+    assert client_inits == [("bot", "secret", True)]
+    assert processed_hits == []
+    info_messages = [m for m in fake_logger.messages if m["level"] == "info"]
+    assert any("link already present" in " ".join(map(str, msg["args"])) for msg in info_messages)
+
+
+def test_link_already_exists_in_kg_detection():
+    class DummyItem:
+        def __init__(self, dataset_ids: List[str]):
+            self._dataset_ids = dataset_ids
+
+        def get_json(self):
+            return {
+                "claims": {
+                    "P223": [
+                        {"mainsnak": {"datavalue": {"value": {"id": dataset_id}}}}
+                        for dataset_id in self._dataset_ids
+                    ]
+                }
+            }
+
+    class DummyItemEndpoint:
+        def __init__(self, item_map: Dict[str, DummyItem]):
+            self._item_map = item_map
+
+        def get(self, entity_id: str):
+            return self._item_map[entity_id]
+
+    class DummyClient:
+        def __init__(self, items: Dict[str, DummyItem]):
+            self.item = DummyItemEndpoint(items)
+
+    client = DummyClient({"QPublication": DummyItem(["QDataset"])})
+    assert kg_updates._link_already_exists_in_kg(client, "QPublication", "QDataset") is True
+
+    client_without = DummyClient({"QPublication": DummyItem([])})
+    assert kg_updates._link_already_exists_in_kg(client_without, "QPublication", "QDataset") is False
 

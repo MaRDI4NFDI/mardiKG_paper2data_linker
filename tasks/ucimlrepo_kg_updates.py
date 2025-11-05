@@ -18,6 +18,8 @@ def link_publications_to_datasets_in_mardi_kg(
     publication's item pointing to the corresponding dataset QID, and
     adds a `P1689` (extracted from) reference pointing to the original UCI dataset URL.
 
+    Before a link is added to the KG, its existence is checked and actual linking skipped if found.
+
     Args:
         hits (List[Dict]): A list of dictionaries, each representing a publication-dataset link
         secrets_path (str, optional): Path to a secrets file containing
@@ -41,11 +43,36 @@ def link_publications_to_datasets_in_mardi_kg(
     hits_qids = ", ".join(hit.get("publication_mardi_QID", "?") for hit in hits)
     logger.info("QIDs (publications) to be updated: %s", hits_qids)
 
+    processed = 0
+    skipped = 0
+
     # Perform the linking for all items
     for hit in hits:
-        _process_hit( hit, mc)
+        dataset_qid = hit.get("dataset_mardi_QID")
+        publication_qid = hit.get("publication_mardi_QID")
 
-    logger.info("Finished updating %d items", len(hits))
+        if dataset_qid and publication_qid:
+            try:
+                if _link_already_exists_in_kg(mc, publication_qid, dataset_qid):
+                    logger.info(
+                        "Skipping linking publication %s and dataset %s — link is already present in MaRDI KG.",
+                        publication_qid,
+                        dataset_qid,
+                    )
+                    skipped += 1
+                    continue
+            except Exception as exc:
+                logger.warning(
+                    "Could not verify existing link for publication %s and dataset %s: %s",
+                    publication_qid,
+                    dataset_qid,
+                    exc,
+                )
+
+        _process_hit(hit, mc)
+        processed += 1
+
+    logger.info("Finished updating %d items (%d skipped).", processed, skipped)
 
 
 def _process_hit(hit: Dict, mc: MardiClient) -> None:
@@ -71,6 +98,19 @@ def _process_hit(hit: Dict, mc: MardiClient) -> None:
         _update_kg_item_with_repo(mc, publication_mardi_QID, dataset_mardi_QID, dataset_uci_url)
     else:
         logger.warning(f"Skipping due to missing fields: {hit}")
+
+
+def _link_already_exists_in_kg(mc: MardiClient, publication_qid: str, dataset_qid: str) -> bool:
+    """Returns True if the publication already cites the dataset via P223."""
+    item: MardiItem = mc.item.get(entity_id=publication_qid)
+    claims = item.get_json().get("claims", {}).get("P223", [])
+    for claim in claims:
+        mainsnak = claim.get("mainsnak", {})
+        datavalue = mainsnak.get("datavalue", {})
+        value = datavalue.get("value", {})
+        if isinstance(value, dict) and value.get("id") == dataset_qid:
+            return True
+    return False
 
 def _update_kg_item_with_repo(
         mc: MardiClient,
