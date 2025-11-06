@@ -24,4 +24,4 @@ jobs:
           pip install flake8
 
       - name: Run Flake8 for code quality
-        run: flake8 --recursive --filename=*.py .
+        run: flake8 .
