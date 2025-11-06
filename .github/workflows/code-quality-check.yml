@@ -1,0 +1,27 @@
+name: Security and Quality Scan
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  code_quality_and_security_scan:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          pip install flake8
+
+      - name: Run Flake8 for code quality
+        run: flake8 --recursive --filename=*.py .
