@@ -1,4 +1,5 @@
-# For execution on a Prefect server the secrets have to be set - see README.MD for details.
+# For execution on a Prefect server the secrets have to be set.
+# See README.md for details.
 
 # Run this for CLOUD execution:
 #   prefect cloud login
@@ -39,6 +40,3 @@ if __name__ == "__main__":
             "git+https://github.com/MaRDI4NFDI/mardiportal-workflowtools.git"
         ]},
     )
-
-
-
