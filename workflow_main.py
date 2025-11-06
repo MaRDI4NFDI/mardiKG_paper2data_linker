@@ -1,4 +1,5 @@
-# If you are developing locally, make sure to be on the most current version of the tools lib:
+# If you are developing locally, make sure to be on the most current
+# version of the tools lib:
 # -> pip install -e ../mardiportal-workflowtools
 
 import getpass
@@ -11,20 +12,23 @@ from pathlib import Path
 from tasks.ucimlrepo_get_dump import get_dump
 from tasks.ucimlrepo_get_datasets import get_available_datasets
 from tasks.ucimlrepo_update_dump import update_dump
-from tasks.ucimlrepo_link_intropapers_with_datasets import link_intropapers_with_datasets
+from tasks.ucimlrepo_link_intropapers_with_datasets import (
+    link_intropapers_with_datasets,
+)
 from tasks.ucimlrepo_link_papers_with_datasets import link_papers_with_datasets
 from tasks.upload import upload_artifacts
 
 from utils.logger_helper import configure_prefect_logging_to_file
 
-# Set paths
-DATA_PATH="./data" # Path where intermediate data and the database file should be stored locally.
+# Path where intermediate data and the database file should be stored locally.
+DATA_PATH = "./data"
 
 # Set basic logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
+
 
 @flow
 def process_datasets(
@@ -35,9 +39,16 @@ def process_datasets(
 
     # Configure logging
     logfile_name = "workflow.log.txt"
-    configure_prefect_logging_to_file( logfile_name )
+    configure_prefect_logging_to_file(logfile_name)
     logger = get_run_logger()
-    logger.info(f"Starting workflow 'mardiKG_paper2data_linker' on system: {socket.gethostname()} by user: {getpass.getuser()}")
+    system_hostname = socket.gethostname()
+    current_user = getpass.getuser()
+    logger.info(
+        "Starting workflow 'mardiKG_paper2data_linker' on system %s "
+        "by user %s",
+        system_hostname,
+        current_user,
+    )
 
     # Check whether data directory already exists
     Path(DATA_PATH).mkdir(parents=True, exist_ok=True)
@@ -70,13 +81,16 @@ def process_datasets(
     # Link papers to datasets
     logger.info("Processing dump: linking papers to datasets...")
     mapping_file = str(Path(DATA_PATH) / "uci2mardi_dataset_mapping.txt")
-    link_papers_with_datasets.submit(json_input=uci_dump_file_and_path, mapping_file=mapping_file).result()
+    link_papers_with_datasets.submit(
+        json_input=uci_dump_file_and_path,
+        mapping_file=mapping_file,
+    ).result()
 
     # Link introductionary papers to datasets
-    logger.info("Processing dump: linking introductionary papers to datasets...")
-    mapping_file = str(Path(DATA_PATH) / "uci2mardi_dataset_mapping.txt")
+    logger.info("Linking intro papers to datasets")
     link_intropapers_with_datasets.submit(
-        json_input=uci_dump_file_and_path, mapping_file=mapping_file
+        json_input=uci_dump_file_and_path,
+        mapping_file=mapping_file,
     ).wait()
 
     # Upload logfile and updated dump-file if needed
@@ -93,7 +107,6 @@ def process_datasets(
     ).wait()
 
     logger.info("Workflow complete.")
-
 
 
 if __name__ == "__main__":
